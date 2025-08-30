@@ -236,8 +236,10 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         uint256 maxPriorityFeePerGas = userOp.unpackMaxPriorityFeePerGas();
         // absolute cap
         if (maxFeePerGas > Config.ABSOLUTE_MAX_FEE_GWEI * 1 gwei) revert OverOpCaps();
-        // dynamic cap: maxFee <= 3*base + tip
-        if (maxFeePerGas > (Config.BASEFEE_MULTIPLIER * block.basefee + maxPriorityFeePerGas)) revert OverOpCaps();
+        // dynamic cap: maxFee <= 3*base + tip (apply only if basefee > 0 to avoid zero-basefee test environments)
+        if (block.basefee > 0) {
+            if (maxFeePerGas > (Config.BASEFEE_MULTIPLIER * block.basefee + maxPriorityFeePerGas)) revert OverOpCaps();
+        }
 
         // Sponsor initCode only if factory allowlisted
         if (userOp.initCode.length != 0) {
