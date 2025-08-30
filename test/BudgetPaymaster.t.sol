@@ -7,6 +7,7 @@ import {IEntryPointMinimal} from "contracts/interfaces/IEntryPointMinimal.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
+import {ReceiptNFT} from "contracts/ReceiptNFT.sol";
 
 contract MockEntryPoint is Test, IEntryPointMinimal {
     address public paymaster;
@@ -195,5 +196,27 @@ contract BudgetPaymasterTest is Test {
         vm.prank(address(ep));
         vm.expectRevert(BudgetPaymaster.OverOpCaps.selector);
         pm.validatePaymasterUserOp(uo, bytes32(0), 0.001 ether);
+    }
+
+    function test_receipt_minted_on_postop() public {
+        // Deploy receipt NFT and set MINTER to the pm
+        vm.startPrank(ADMIN);
+        ReceiptNFT nft = new ReceiptNFT(ADMIN);
+        nft.grantRole(nft.MINTER_ROLE(), address(pm));
+        pm.setReceiptNFT(address(nft));
+        vm.stopPrank();
+
+        PackedUserOperation memory uo = _baseUserOp(SENDER);
+        vm.startPrank(address(ep));
+        (bytes memory ctx,) = pm.validatePaymasterUserOp(uo, bytes32(uint256(123)), 0.002 ether);
+        pm.postOp(IPaymaster.PostOpMode.opSucceeded, ctx, 0.001 ether, 0);
+        vm.stopPrank();
+
+        // tokenId 1 should exist and belong to SENDER
+        assertEq(nft.ownerOf(1), SENDER);
+        (ReceiptNFT.ReceiptData memory r) = nft.getReceipt(1);
+        assertEq(r.actualGasCostWei, 0.001 ether);
+        (uint128 limit_, uint128 used_, uint32 epoch_) = pm.getBudget(SENDER);
+        assertEq(r.epochIndex, epoch_);
     }
 }
