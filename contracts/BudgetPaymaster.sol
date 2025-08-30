@@ -9,6 +9,7 @@ import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Config} from "./Config.sol";
+import {IReceiptNFT} from "./interfaces/IReceiptNFT.sol";
 
 /// BudgetPaymaster (M0/M1)
 /// - AccessControl roles (ADMIN, PAUSER)
@@ -61,6 +62,9 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     uint256 public basefeeMultiplier = Config.BASEFEE_MULTIPLIER;
     uint256 public maxWeiPerOp = Config.MAX_WEI_PER_OP;
 
+    /// Receipt NFT (optional)
+    IReceiptNFT public receiptNFT;
+
     // --------------------
     // Events
     // --------------------
@@ -77,6 +81,7 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     event DepositWithdrawn(address indexed to, uint256 amount);
     event TreasuryUpdated(address indexed newTreasury);
     event SimpleAccountFactoryUpdated(address indexed newFactory);
+    event ReceiptNFTUpdated(address indexed nft);
 
     // --------------------
     // Errors
@@ -147,6 +152,12 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     function setSimpleAccountFactory(address newFactory) external onlyRole(ADMIN_ROLE) {
         simpleAccountFactory = newFactory;
         emit SimpleAccountFactoryUpdated(newFactory);
+    }
+
+    /// Update the receipt NFT contract
+    function setReceiptNFT(address nft) external onlyRole(ADMIN_ROLE) {
+        receiptNFT = IReceiptNFT(nft);
+        emit ReceiptNFTUpdated(nft);
     }
 
     // --------------------
@@ -257,7 +268,7 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
 
     function validatePaymasterUserOp(
         PackedUserOperation calldata userOp,
-        bytes32 /*userOpHash*/,
+        bytes32 userOpHash,
         uint256 maxCost
     ) external override returns (bytes memory context, uint256 validationData) {
         _requireFromEntryPoint();
@@ -303,8 +314,8 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
             if (maxCost > globalRemaining) revert OverOpCaps();
         }
 
-        // Pass sender in context for postOp accounting
-        return (abi.encode(account), 0);
+        // Pass sender and userOpHash in context for postOp accounting and optional receipt
+        return (abi.encode(account, userOpHash), 0);
     }
 
     function postOp(
@@ -315,7 +326,7 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     ) external override {
         _requireFromEntryPoint();
 
-        address account = abi.decode(context, (address));
+        (address account, bytes32 userOpHash) = abi.decode(context, (address, bytes32));
         Budget storage b = _budgets[account];
         _lazyRollover(account, b);
         _lazyRolloverGlobal();
@@ -335,6 +346,11 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
             globalUsedWei = uint128(gNewUsed);
             uint256 gRemaining = uint256(globalLimitWei) - uint256(globalUsedWei);
             emit GlobalBudgetCharged(charge, globalUsedWei, gRemaining);
+        }
+
+        // Optional receipt mint
+        if (address(receiptNFT) != address(0) && charge > 0) {
+            receiptNFT.mintReceipt(account, userOpHash, charge, _currentEpochIndex(block.timestamp));
         }
     }
 
