@@ -5,6 +5,9 @@ import {AccessControl} from "openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "openzeppelin/contracts/utils/Pausable.sol";
 
 import {IEntryPointMinimal} from "./interfaces/IEntryPointMinimal.sol";
+import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Config} from "./Config.sol";
 
 /// BudgetPaymaster (skeleton for M0 scaffolding)
@@ -12,7 +15,9 @@ import {Config} from "./Config.sol";
 /// - Per-sender budget storage (limit, used, epochIndex)
 /// - receive() auto-deposits ETH into EntryPoint deposit
 /// - Admin withdraw helper from EntryPoint deposit
-contract BudgetPaymaster is AccessControl, Pausable {
+contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
+    using UserOperationLib for PackedUserOperation;
+
     // --------------------
     // Roles
     // --------------------
@@ -153,5 +158,27 @@ contract BudgetPaymaster is AccessControl, Pausable {
         // Returning 0 keeps skeleton compilable and non-functional for accounting.
         timestamp; // silence unused warning
         return 0;
+    }
+
+    // --------------------
+    // ERC-4337 hooks (to be implemented in M0)
+    // --------------------
+
+    function validatePaymasterUserOp(
+        PackedUserOperation calldata /*userOp*/,
+        bytes32 /*userOpHash*/,
+        uint256 /*maxCost*/
+    ) external override returns (bytes memory context, uint256 validationData) {
+        // M0 implementation to be added
+        return (bytes(""), 0);
+    }
+
+    function postOp(
+        PostOpMode /*mode*/,
+        bytes calldata /*context*/,
+        uint256 /*actualGasCost*/,
+        uint256 /*actualUserOpFeePerGas*/
+    ) external override {
+        // M0 implementation to be added
     }
 }
