@@ -10,13 +10,14 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {UserOperationLib} from "account-abstraction/core/UserOperationLib.sol";
 import {Config} from "./Config.sol";
 
-/// BudgetPaymaster (M0)
+/// BudgetPaymaster (M0/M1)
 /// - AccessControl roles (ADMIN, PAUSER)
 /// - Per-sender budgets with calendar-month UTC epoching (YYYY*12+MM)
 /// - Sender-allowlist via budget limit > 0
-/// - Per-op safety caps (gas, gas price, worst-case wei)
+/// - Per-op safety caps (gas, gas price, worst-case wei) [admin-settable]
+/// - Optional global monthly cap across all users [M1]
 /// - receive() auto-deposits ETH into EntryPoint deposit
-/// - Admin withdraw helper from EntryPoint deposit
+/// - Admin withdraw/stake helpers
 contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     using UserOperationLib for PackedUserOperation;
 
@@ -47,12 +48,31 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     /// Per-sender budgets
     mapping(address => Budget) private _budgets;
 
+    /// Global monthly cap (optional)
+    uint128 public globalLimitWei;      // 0 means disabled
+    uint128 public globalUsedWei;
+    uint32 public globalEpochIndex;
+
+    /// Admin-settable caps
+    uint256 public maxVerificationGas = Config.MAX_VERIFICATION_GAS;
+    uint256 public maxCallGas = Config.MAX_CALL_GAS;
+    uint256 public maxPostOpGas = Config.MAX_POST_OP_GAS;
+    uint256 public absoluteMaxFeeGwei = Config.ABSOLUTE_MAX_FEE_GWEI;
+    uint256 public basefeeMultiplier = Config.BASEFEE_MULTIPLIER;
+    uint256 public maxWeiPerOp = Config.MAX_WEI_PER_OP;
+
     // --------------------
     // Events
     // --------------------
     event BudgetSet(address indexed account, uint256 limitWei);
     event BudgetCharged(address indexed account, uint256 amountWei, uint256 newUsedWei, uint256 remainingWei);
     event EpochRollover(address indexed account, uint32 newEpochIndex);
+    event GlobalBudgetSet(uint256 limitWei);
+    event GlobalBudgetCharged(uint256 amountWei, uint256 newUsedWei, uint256 remainingWei);
+    event GlobalEpochRollover(uint32 newEpochIndex);
+    event CapsUpdated(uint256 maxVerificationGas, uint256 maxCallGas, uint256 maxPostOpGas);
+    event FeeCapsUpdated(uint256 absoluteMaxFeeGwei, uint256 basefeeMultiplier);
+    event MaxWeiPerOpUpdated(uint256 maxWeiPerOp);
     event DepositAdded(address indexed from, uint256 amount);
     event DepositWithdrawn(address indexed to, uint256 amount);
     event TreasuryUpdated(address indexed newTreasury);
@@ -129,40 +149,12 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         emit SimpleAccountFactoryUpdated(newFactory);
     }
 
-    /// Admin deposits ETH into EntryPoint on behalf of this paymaster
-    function deposit() external payable onlyRole(ADMIN_ROLE) {
-        if (msg.value > 0) {
-            ENTRY_POINT.depositTo{value: msg.value}(address(this));
-            emit DepositAdded(msg.sender, msg.value);
-        }
-    }
-
-    /// Admin adds stake with an unstake delay (seconds)
-    function addStake(uint32 unstakeDelaySec) external payable onlyRole(ADMIN_ROLE) {
-        ENTRY_POINT.addStake{value: msg.value}(unstakeDelaySec);
-    }
-
-    /// Admin unlocks stake to start the withdrawal timer
-    function unlockStake() external onlyRole(ADMIN_ROLE) {
-        ENTRY_POINT.unlockStake();
-    }
-
-    /// Admin withdraws unlocked stake to treasury
-    function withdrawStake() external onlyRole(ADMIN_ROLE) {
-        ENTRY_POINT.withdrawStake(payable(treasury));
-    }
-
     // --------------------
     // Pause controls
     // --------------------
 
-    function pause() external onlyRole(PAUSER_ROLE) {
-        _pause();
-    }
-
-    function unpause() external onlyRole(PAUSER_ROLE) {
-        _unpause();
-    }
+    function pause() external onlyRole(PAUSER_ROLE) { _pause(); }
+    function unpause() external onlyRole(PAUSER_ROLE) { _unpause(); }
 
     // --------------------
     // Budget admin API
@@ -179,6 +171,30 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
     function getBudget(address account) external view returns (uint128 limitWei, uint128 usedWei, uint32 epochIndex) {
         Budget storage b = _budgets[account];
         return (b.limitWei, b.usedWei, b.epochIndex);
+    }
+
+    function setGlobalMonthlyCap(uint128 limitWei) external onlyRole(ADMIN_ROLE) {
+        // If lowering below used, cap will be effectively fully spent until next rollover
+        globalLimitWei = limitWei;
+        emit GlobalBudgetSet(limitWei);
+    }
+
+    function setOpCaps(uint256 _maxVerificationGas, uint256 _maxCallGas, uint256 _maxPostOpGas) external onlyRole(ADMIN_ROLE) {
+        maxVerificationGas = _maxVerificationGas;
+        maxCallGas = _maxCallGas;
+        maxPostOpGas = _maxPostOpGas;
+        emit CapsUpdated(_maxVerificationGas, _maxCallGas, _maxPostOpGas);
+    }
+
+    function setFeeCaps(uint256 _absoluteMaxFeeGwei, uint256 _basefeeMultiplier) external onlyRole(ADMIN_ROLE) {
+        absoluteMaxFeeGwei = _absoluteMaxFeeGwei;
+        basefeeMultiplier = _basefeeMultiplier;
+        emit FeeCapsUpdated(_absoluteMaxFeeGwei, _basefeeMultiplier);
+    }
+
+    function setMaxWeiPerOp(uint256 _maxWeiPerOp) external onlyRole(ADMIN_ROLE) {
+        maxWeiPerOp = _maxWeiPerOp;
+        emit MaxWeiPerOpUpdated(_maxWeiPerOp);
     }
 
     // --------------------
@@ -226,8 +242,17 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         }
     }
 
+    function _lazyRolloverGlobal() internal {
+        uint32 nowEpoch = _currentEpochIndex(block.timestamp);
+        if (globalEpochIndex != nowEpoch) {
+            globalEpochIndex = nowEpoch;
+            globalUsedWei = 0;
+            emit GlobalEpochRollover(nowEpoch);
+        }
+    }
+
     // --------------------
-    // ERC-4337 hooks (M0)
+    // ERC-4337 hooks (M0/M1)
     // --------------------
 
     function validatePaymasterUserOp(
@@ -241,6 +266,7 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         address account = userOp.sender;
         Budget storage b = _budgets[account];
         _lazyRollover(account, b);
+        _lazyRolloverGlobal();
 
         if (b.limitWei == 0) revert NotAllowlistedSender();
 
@@ -248,23 +274,17 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         uint256 verificationGas = userOp.unpackVerificationGasLimit();
         uint256 callGas = userOp.unpackCallGasLimit();
         uint256 postOpGas = userOp.unpackPostOpGasLimit();
-        if (
-            verificationGas > Config.MAX_VERIFICATION_GAS ||
-            callGas > Config.MAX_CALL_GAS ||
-            postOpGas > Config.MAX_POST_OP_GAS
-        ) revert OverOpCaps();
+        if (verificationGas > maxVerificationGas || callGas > maxCallGas || postOpGas > maxPostOpGas) revert OverOpCaps();
 
         // Enforce gas price caps
         uint256 maxFeePerGas = userOp.unpackMaxFeePerGas();
         uint256 maxPriorityFeePerGas = userOp.unpackMaxPriorityFeePerGas();
-        // absolute cap
-        if (maxFeePerGas > Config.ABSOLUTE_MAX_FEE_GWEI * 1 gwei) revert OverOpCaps();
-        // dynamic cap: maxFee <= 3*base + tip (apply only if basefee > 0 to avoid zero-basefee test environments)
+        if (maxFeePerGas > absoluteMaxFeeGwei * 1 gwei) revert OverOpCaps();
         if (block.basefee > 0) {
-            if (maxFeePerGas > (Config.BASEFEE_MULTIPLIER * block.basefee + maxPriorityFeePerGas)) revert OverOpCaps();
+            if (maxFeePerGas > (basefeeMultiplier * block.basefee + maxPriorityFeePerGas)) revert OverOpCaps();
         }
 
-        // Sponsor initCode only if factory allowlisted
+        // initCode factory allowlist (for sponsored deployments)
         if (userOp.initCode.length != 0) {
             if (simpleAccountFactory == address(0)) revert FactoryNotAllowlisted();
             if (userOp.initCode.length < 20) revert FactoryNotAllowlisted();
@@ -272,10 +292,16 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
             if (factory != simpleAccountFactory) revert FactoryNotAllowlisted();
         }
 
-        // Remaining budget check vs worst-case cost
+        // Remaining budget checks
         uint256 remaining = uint256(b.limitWei) - uint256(b.usedWei);
         if (maxCost > remaining) revert OverOpCaps();
-        if (maxCost > Config.MAX_WEI_PER_OP) revert OverOpCaps();
+        if (maxCost > maxWeiPerOp) revert OverOpCaps();
+
+        // Global cap check (if enabled)
+        if (globalLimitWei != 0) {
+            uint256 globalRemaining = uint256(globalLimitWei) - uint256(globalUsedWei);
+            if (maxCost > globalRemaining) revert OverOpCaps();
+        }
 
         // Pass sender in context for postOp accounting
         return (abi.encode(account), 0);
@@ -292,15 +318,46 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         address account = abi.decode(context, (address));
         Budget storage b = _budgets[account];
         _lazyRollover(account, b);
+        _lazyRolloverGlobal();
 
         // Charge actual cost (clamped into uint128)
         uint128 charge = actualGasCost > type(uint128).max ? type(uint128).max : uint128(actualGasCost);
         uint256 newUsed = uint256(b.usedWei) + uint256(charge);
-        if (newUsed > type(uint128).max) {
-            newUsed = type(uint128).max;
-        }
+        if (newUsed > type(uint128).max) { newUsed = type(uint128).max; }
         b.usedWei = uint128(newUsed);
         uint256 remaining = uint256(b.limitWei) - uint256(b.usedWei);
         emit BudgetCharged(account, charge, b.usedWei, remaining);
+
+        // Global accounting (if enabled)
+        if (globalLimitWei != 0) {
+            uint256 gNewUsed = uint256(globalUsedWei) + uint256(charge);
+            if (gNewUsed > type(uint128).max) { gNewUsed = type(uint128).max; }
+            globalUsedWei = uint128(gNewUsed);
+            uint256 gRemaining = uint256(globalLimitWei) - uint256(globalUsedWei);
+            emit GlobalBudgetCharged(charge, globalUsedWei, gRemaining);
+        }
     }
+
+    // --------------------
+    // Stake & deposit admin
+    // --------------------
+
+    /// Admin deposits ETH into EntryPoint on behalf of this paymaster
+    function deposit() external payable onlyRole(ADMIN_ROLE) {
+        if (msg.value > 0) {
+            ENTRY_POINT.depositTo{value: msg.value}(address(this));
+            emit DepositAdded(msg.sender, msg.value);
+        }
+    }
+
+    /// Admin adds stake with an unstake delay (seconds)
+    function addStake(uint32 unstakeDelaySec) external payable onlyRole(ADMIN_ROLE) {
+        ENTRY_POINT.addStake{value: msg.value}(unstakeDelaySec);
+    }
+
+    /// Admin unlocks stake to start the withdrawal timer
+    function unlockStake() external onlyRole(ADMIN_ROLE) { ENTRY_POINT.unlockStake(); }
+
+    /// Admin withdraws unlocked stake to treasury
+    function withdrawStake() external onlyRole(ADMIN_ROLE) { ENTRY_POINT.withdrawStake(payable(treasury)); }
 }
