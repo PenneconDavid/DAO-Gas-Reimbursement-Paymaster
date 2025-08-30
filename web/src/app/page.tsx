@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract } from "wagmi";
 import { parseAbi } from "viem";
+import { getAaMode, setAaMode } from "@/lib/aa";
 
 const budgetAbi = parseAbi([
   "function getBudget(address) view returns (uint128 limitWei, uint128 usedWei, uint32 epochIndex)",
@@ -65,6 +66,15 @@ export default function Home() {
           )}
         </div>
       </header>
+
+      <section>
+        <h2>Mode</h2>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span>AA mode:</span>
+          <button onClick={() => setAaMode(getAaMode() === "enabled" ? "disabled" : "enabled")}>{getAaMode()}</button>
+          <span style={{ opacity: 0.7 }}>(placeholder; direct EOA txs currently)</span>
+        </div>
+      </section>
 
       <section>
         <h2>Check Budget</h2>

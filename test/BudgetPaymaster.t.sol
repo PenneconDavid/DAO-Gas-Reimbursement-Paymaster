@@ -163,4 +163,37 @@ contract BudgetPaymasterTest is Test {
         (, uint128 used, ) = pm.getBudget(SENDER);
         assertEq(used, 0.002 ether);
     }
+
+    function test_global_cap_enforced_and_charged() public {
+        // enable global cap to 0.003 ether
+        vm.startPrank(ADMIN);
+        pm.setGlobalMonthlyCap(0.003 ether);
+        vm.stopPrank();
+
+        PackedUserOperation memory uo = _baseUserOp(SENDER);
+        vm.startPrank(address(ep));
+        // ok within remaining
+        (bytes memory ctx,) = pm.validatePaymasterUserOp(uo, bytes32(0), 0.002 ether);
+        pm.postOp(IPaymaster.PostOpMode.opSucceeded, ctx, 0.002 ether, 0);
+        // next op would exceed remaining (0.002 used, only 0.001 left)
+        vm.expectRevert(BudgetPaymaster.OverOpCaps.selector);
+        pm.validatePaymasterUserOp(uo, bytes32(0), 0.002 ether);
+        vm.stopPrank();
+    }
+
+    function test_setters_adjust_caps() public {
+        vm.startPrank(ADMIN);
+        pm.setOpCaps(90_000, 150_000, 70_000);
+        pm.setFeeCaps(200 /*gwei*/, 4);
+        pm.setMaxWeiPerOp(0.02 ether);
+        vm.stopPrank();
+
+        // Build userOp exceeding new call gas cap to trigger revert
+        PackedUserOperation memory uo = _baseUserOp(SENDER);
+        // override accountGasLimits: verification=80k ok, call=160k > 150k should revert
+        uo.accountGasLimits = bytes32((uint256(80_000) << 128) | uint256(160_000));
+        vm.prank(address(ep));
+        vm.expectRevert(BudgetPaymaster.OverOpCaps.selector);
+        pm.validatePaymasterUserOp(uo, bytes32(0), 0.001 ether);
+    }
 }

@@ -98,3 +98,28 @@ forge script script/SeedBudget.s.sol:SeedBudget \
 ## Next
 - M1: admin-settable caps, fuzz/invariants, global cap.
 - M2: Receipt SBT + web dapp (wagmi/viem) with bundler integration.
+
+## Admin Ops: Caps and Global Cap
+
+Set per-op caps and fee rules:
+```
+$Env:PAYMASTER_ADDRESS=<pm>
+$Env:ADMIN_ADDRESS=<admin>
+$Env:MAX_VERIFICATION_GAS=120000
+$Env:MAX_CALL_GAS=1000000
+$Env:MAX_POSTOP_GAS=120000
+$Env:ABSOLUTE_MAX_FEE_GWEI=150
+$Env:BASEFEE_MULTIPLIER=3
+$Env:MAX_WEI_PER_OP=10000000000000000  # 0.01 ETH
+
+forge script script/SetCaps.s.sol:SetCaps --rpc-url <RPC> --broadcast --private-key <ADMIN_PK> -vvvv
+```
+
+Enable or adjust global monthly cap (0 disables):
+```
+$Env:PAYMASTER_ADDRESS=<pm>
+$Env:ADMIN_ADDRESS=<admin>
+$Env:GLOBAL_LIMIT_WEI=500000000000000000  # 0.5 ETH
+
+forge script script/SetGlobalCap.s.sol:SetGlobalCap --rpc-url <RPC> --broadcast --private-key <ADMIN_PK> -vvvv
+```
