@@ -5,6 +5,7 @@ import { WagmiProvider } from "wagmi";
 import { http, createConfig } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { defineChain } from "viem";
+import { injected } from "@wagmi/connectors";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const customChain = defineChain({
 
 export const wagmiConfig = createConfig({
     chains: [customChain],
+    connectors: [injected()],
     transports: {
         [customChain.id]: http(rpcUrl ? rpcUrl : undefined),
     },
