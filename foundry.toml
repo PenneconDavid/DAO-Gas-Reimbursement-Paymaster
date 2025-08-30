@@ -1,0 +1,20 @@
+[profile.default]
+src = 'contracts'
+out = 'out'
+libs = ['lib']
+solc_version = '0.8.24'
+evm_version = 'paris'
+optimizer = true
+optimizer_runs = 200
+fs_permissions = [{ access = "read", path = "./" }]
+remappings = [
+  'openzeppelin/=lib/openzeppelin-contracts/',
+]
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true
+int_types = 'long'
+number_underscore = 'thousands'
+multiline_func_header = 'attributes_first'
