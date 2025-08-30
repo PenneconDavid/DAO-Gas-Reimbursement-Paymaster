@@ -32,6 +32,17 @@ contract MockEntryPoint is Test, IEntryPointMinimal {
         require(ok, "withdraw fail");
     }
 
+    function addStake(uint32 /*unstakeDelaySec*/) external payable override {
+        // accept stake
+    }
+
+    function unlockStake() external override {}
+
+    function withdrawStake(address payable withdrawAddress) external override {
+        (bool ok,) = withdrawAddress.call{value: address(this).balance}(hex"");
+        require(ok, "withdraw stake fail");
+    }
+
     // Helpers to call paymaster hooks
     function callValidate(
         BudgetPaymaster pm,

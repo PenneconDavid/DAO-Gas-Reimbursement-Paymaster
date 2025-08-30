@@ -129,6 +129,29 @@ contract BudgetPaymaster is AccessControl, Pausable, IPaymaster {
         emit SimpleAccountFactoryUpdated(newFactory);
     }
 
+    /// Admin deposits ETH into EntryPoint on behalf of this paymaster
+    function deposit() external payable onlyRole(ADMIN_ROLE) {
+        if (msg.value > 0) {
+            ENTRY_POINT.depositTo{value: msg.value}(address(this));
+            emit DepositAdded(msg.sender, msg.value);
+        }
+    }
+
+    /// Admin adds stake with an unstake delay (seconds)
+    function addStake(uint32 unstakeDelaySec) external payable onlyRole(ADMIN_ROLE) {
+        ENTRY_POINT.addStake{value: msg.value}(unstakeDelaySec);
+    }
+
+    /// Admin unlocks stake to start the withdrawal timer
+    function unlockStake() external onlyRole(ADMIN_ROLE) {
+        ENTRY_POINT.unlockStake();
+    }
+
+    /// Admin withdraws unlocked stake to treasury
+    function withdrawStake() external onlyRole(ADMIN_ROLE) {
+        ENTRY_POINT.withdrawStake(payable(treasury));
+    }
+
     // --------------------
     // Pause controls
     // --------------------
