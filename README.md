@@ -123,3 +123,21 @@ $Env:GLOBAL_LIMIT_WEI=500000000000000000  # 0.5 ETH
 
 forge script script/SetGlobalCap.s.sol:SetGlobalCap --rpc-url <RPC> --broadcast --private-key <ADMIN_PK> -vvvv
 ```
+
+## Receipts (optional)
+Deploy ReceiptNFT and link it to the paymaster (mint on sponsorship):
+```
+$Env:ADMIN_ADDRESS=<admin>
+$Env:PAYMASTER_ADDRESS=<pm>
+forge script script/DeployReceipt.s.sol:DeployReceipt --rpc-url <RPC> --broadcast --private-key <ADMIN_PK> -vvvv
+```
+
+## AA Integration (M2)
+Web env (add to `web/.env`):
+```
+NEXT_PUBLIC_BUNDLER_RPC_URL=
+NEXT_PUBLIC_ENTRYPOINT_ADDRESS=
+NEXT_PUBLIC_SIMPLE_ACCOUNT_FACTORY=
+NEXT_PUBLIC_PAYMASTER_ADDRESS=
+```
+The web app includes an AA toggle and placeholders (`src/lib/aa.ts`). In M2 we will implement UserOperation construction and bundler submission with `paymasterAndData` containing this paymaster.
