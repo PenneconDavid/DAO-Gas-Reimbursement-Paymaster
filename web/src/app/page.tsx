@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract } from "wagmi";
-import { parseAbi } from "viem";
-import { getAaMode, setAaMode } from "@/lib/aa";
+import { parseAbi, encodeFunctionData, type Address } from "viem";
+import { getAaMode, setAaMode, buildSimpleAccountCallData, buildUserOperationPreview, sendUserOp, getAaEnv, type UserOperationRequest } from "@/lib/aa";
 
 const budgetAbi = parseAbi([
   "function getBudget(address) view returns (uint128 limitWei, uint128 usedWei, uint32 epochIndex)",
@@ -23,6 +23,8 @@ export default function Home() {
   const [keyHex, setKeyHex] = useState<string>("0x706172616d");
   const [value, setValue] = useState<string>("1");
   const [roleUser, setRoleUser] = useState<string>("");
+  const [aaPreview, setAaPreview] = useState<UserOperationRequest | null>(null);
+  const [aaError, setAaError] = useState<string>("");
 
   const { connectors, connect, status: connectStatus } = useConnect();
   const { address, isConnected } = useAccount();
@@ -44,6 +46,54 @@ export default function Home() {
   const epoch = tuple?.[2];
 
   const availableConnectors = useMemo(() => connectors.filter((c) => c.id !== "injected" || c.ready), [connectors]);
+
+  async function buildAaForGovCall(fn: "setParam" | "grantRole") {
+    setAaError("");
+    setAaPreview(null);
+    try {
+      const env = getAaEnv();
+      if (!env.entryPoint || !env.paymaster) throw new Error("Missing ENTRYPOINT/PAYMASTER env");
+      if (!accountAddr) throw new Error("Set SimpleAccount address in 'Account (smart wallet)'");
+      if (!gov) throw new Error("Set GovActions address");
+
+      let innerData: `0x${string}`;
+      if (fn === "setParam") {
+        innerData = encodeFunctionData({ abi: govAbi, functionName: "setParam", args: [keyHex as `0x${string}`, BigInt(value || "0")] });
+      } else {
+        innerData = encodeFunctionData({ abi: govAbi, functionName: "grantRole", args: [roleUser as `0x${string}`] });
+      }
+
+      const callData = buildSimpleAccountCallData({ account: accountAddr as Address, target: gov as Address, value: 0n, data: innerData });
+
+      const uo = buildUserOperationPreview({
+        account: accountAddr as Address,
+        callData,
+        maxVerificationGas: 100_000n,
+        maxCallGas: 500_000n,
+        postOpGas: 80_000n,
+        preVerificationGas: 50_000n,
+        maxFeePerGas: 20_000_000_000n,
+        maxPriorityFeePerGas: 1_000_000_000n,
+        paymaster: env.paymaster,
+      });
+      setAaPreview(uo);
+    } catch (e) {
+      const err = e as { message?: string };
+      setAaError(err?.message || String(e));
+    }
+  }
+
+  async function attemptSendAa() {
+    setAaError("");
+    try {
+      if (!aaPreview) throw new Error("Build preview first");
+      const hash = await sendUserOp(aaPreview);
+      alert(`Submitted userOp: ${hash}`);
+    } catch (e) {
+      const err = e as { message?: string };
+      setAaError(err?.message || String(e));
+    }
+  }
 
   return (
     <main style={{ padding: 24, maxWidth: 900, margin: "0 auto", display: "grid", gap: 24 }}>
@@ -106,12 +156,7 @@ export default function Home() {
           <button
             disabled={!isConnected || !gov}
             onClick={async () => {
-              await writeContractAsync({
-                address: gov as `0x${string}`,
-                abi: govAbi,
-                functionName: "setParam",
-                args: [keyHex as `0x${string}`, BigInt(value || "0")],
-              });
+              await writeContractAsync({ address: gov as `0x${string}`, abi: govAbi, functionName: "setParam", args: [keyHex as `0x${string}`, BigInt(value || "0")] });
             }}
           >
             setParam
@@ -122,12 +167,7 @@ export default function Home() {
           <button
             disabled={!isConnected || !gov || !roleUser}
             onClick={async () => {
-              await writeContractAsync({
-                address: gov as `0x${string}`,
-                abi: govAbi,
-                functionName: "grantRole",
-                args: [roleUser as `0x${string}`],
-              });
+              await writeContractAsync({ address: gov as `0x${string}`, abi: govAbi, functionName: "grantRole", args: [roleUser as `0x${string}`] });
             }}
           >
             grantRole
@@ -135,6 +175,19 @@ export default function Home() {
         </div>
         {writeError && <p style={{ color: "crimson" }}>{String((writeError as { message?: string })?.message || writeError)}</p>}
         <p style={{ opacity: 0.7 }}>AA integration will replace these with sponsored ops in M2.</p>
+      </section>
+
+      <section>
+        <h2>AA Preview</h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => buildAaForGovCall("setParam")}>Build AA setParam</button>
+          <button onClick={() => buildAaForGovCall("grantRole")}>Build AA grantRole</button>
+          <button onClick={attemptSendAa} disabled={!aaPreview}>Attempt send (experimental)</button>
+        </div>
+        {aaError && <p style={{ color: "crimson" }}>{aaError}</p>}
+        {aaPreview && (
+          <pre style={{ marginTop: 8, padding: 8, background: "#111", color: "#ddd", overflowX: "auto" }}>{JSON.stringify(aaPreview, null, 2)}</pre>
+        )}
       </section>
     </main>
   );
