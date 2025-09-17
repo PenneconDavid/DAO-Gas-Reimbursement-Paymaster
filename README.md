@@ -5,17 +5,69 @@ EntryPoint v0.8 verifying paymaster with per-sender monthly budgets, sender allo
 ## Status
 - M0 scaffolding complete: contracts, tests, deploy + ops scripts.
 
+## One‑paragraph pitch
+This repo demonstrates a DAO-style gas reimbursement system using ERC‑4337: a verifying paymaster sponsors gas for allowlisted smart accounts within per‑month budgets, enforces per‑operation safety caps, and optionally mints soulbound receipts for each sponsored UserOperation. It includes a small demo dapp, unit/integration tests, and workflows to run locally or on testnets.
+
+## Architecture
+```mermaid
+flowchart TD
+  UI[Web Dapp] -->|UserOperation| Bundler
+  subgraph AA[ERC-4337]
+  Bundler --> EntryPoint
+  EntryPoint -->|validatePaymasterUserOp| Paymaster
+  EntryPoint -->|postOp| Paymaster
+  EntryPoint --> SmartAccount
+  SmartAccount --> GovActions
+  end
+  Paymaster -->|deposit/stake| EntryPoint
+  Paymaster -->|optional mint| ReceiptNFT
+```
+
+### 4337 handleOps sequence (high-level)
+```mermaid
+sequenceDiagram
+  participant UI
+  participant Bundler
+  participant EntryPoint
+  participant Paymaster
+  participant Account as SmartAccount
+  participant Target as GovActions
+
+  UI->>Bundler: sendUserOperation(UserOp)
+  Bundler->>EntryPoint: handleOps(batch)
+  EntryPoint->>Account: validateUserOp
+  EntryPoint->>Paymaster: validatePaymasterUserOp
+  Note right of Paymaster: check budget, caps, allowlist
+  EntryPoint->>Account: execute callData
+  Account->>Target: business call (setParam/grantRole)
+  EntryPoint->>Paymaster: postOp(actualGasCost)
+  Note right of Paymaster: debit budget; optional mint ReceiptNFT
+  EntryPoint->>Bundler: settle; refund remainder
+```
+
 ## Contracts
-- `contracts/BudgetPaymaster.sol`: Paymaster with budgets, caps, epoch math, pause, deposit/stake helpers.
+- `contracts/BudgetPaymaster.sol`: Paymaster with budgets, caps, epoch math, pause, deposit/stake helpers, optional ReceiptNFT.
+- `contracts/ReceiptNFT.sol`: ERC‑721 SBT (ERC‑5192 semantics) minted per sponsored operation.
 - `contracts/GovActions.sol`: Demo target contract emitting events.
+
+## Local Demo (no bundler)
+Simulate validate+postOp locally (shows budgeting and events):
+```
+make demo
+```
+Outputs include budget updates and “Demo done” log. This uses a mock EntryPoint and does not broadcast a real UserOperation.
+
+## Full AA Demo (optional)
+Use a bundler URL:
+- Hosted: Etherspot Skandha, Pimlico, Stackup, ZeroDev → create a project and copy the HTTPS bundler URL.
+- Local: run a bundler docker (Skandha/Stackup), point NEXT_PUBLIC_BUNDLER_RPC_URL to http://localhost:PORT.
 
 ## Prereqs
 - Foundry (forge) installed and on PATH.
-- Testnet RPC and funded ADMIN Safe/account.
+- Testnet RPC and funded ADMIN Safe/account (for testnet mode).
 
 ## Env
 Copy `.env.example` to `.env` and set for your target chain:
-
 ```
 ENTRYPOINT_ADDRESS_SEPOLIA=...
 SIMPLE_ACCOUNT_FACTORY_SEPOLIA=...
@@ -89,18 +141,7 @@ forge script script/SeedBudget.s.sol:SeedBudget \
   -vvvv
 ```
 
-## Notes
-- Sender allowlist is implicit: budget > 0.
-- Epoch resets lazily on first op each month (UTC).
-- Per-op caps and initCode factory allowlist are enforced.
-- Pause with `pause()` in emergencies.
-
-## Next
-- M1: admin-settable caps, fuzz/invariants, global cap.
-- M2: Receipt SBT + web dapp (wagmi/viem) with bundler integration.
-
 ## Admin Ops: Caps and Global Cap
-
 Set per-op caps and fee rules:
 ```
 $Env:PAYMASTER_ADDRESS=<pm>
@@ -132,12 +173,24 @@ $Env:PAYMASTER_ADDRESS=<pm>
 forge script script/DeployReceipt.s.sol:DeployReceipt --rpc-url <RPC> --broadcast --private-key <ADMIN_PK> -vvvv
 ```
 
-## AA Integration (M2)
-Web env (add to `web/.env`):
+## Web Dapp
+- `web/src/app/page.tsx` includes budget view, GovActions calls (EOA), and AA preview builder.
+- Env (`web/.env`):
 ```
-NEXT_PUBLIC_BUNDLER_RPC_URL=
+NEXT_PUBLIC_RPC_URL=
+NEXT_PUBLIC_CHAIN_ID=11155111
 NEXT_PUBLIC_ENTRYPOINT_ADDRESS=
-NEXT_PUBLIC_SIMPLE_ACCOUNT_FACTORY=
 NEXT_PUBLIC_PAYMASTER_ADDRESS=
+NEXT_PUBLIC_GOV_ACTIONS_ADDRESS=
+NEXT_PUBLIC_BUNDLER_RPC_URL=
+NEXT_PUBLIC_SIMPLE_ACCOUNT_FACTORY=
 ```
+
+## AA Integration (M2)
 The web app includes an AA toggle and placeholders (`src/lib/aa.ts`). In M2 we will implement UserOperation construction and bundler submission with `paymasterAndData` containing this paymaster.
+
+## Limitations & future work
+- Sender-based allowlist (no target parsing) for MVP; can add per-target checks for SimpleAccount.
+- AA send is preview-only in UI; full bundler integration to follow.
+- Global cap is simplistic; consider role-based workflows and rate limiting.
+- No upgradability; replace-and-migrate if logic changes.
