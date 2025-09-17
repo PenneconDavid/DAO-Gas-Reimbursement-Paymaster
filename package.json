@@ -1,0 +1,7 @@
+{
+  "name": "dao-gas-reimbursement-paymaster",
+  "private": true,
+  "scripts": {
+    "solhint": "npx solhint 'contracts/**/*.sol' 'contracts/**/**/*.sol' 'script/**/*.sol' 'test/**/*.sol'"
+  }
+}

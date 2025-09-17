@@ -19,6 +19,42 @@ jobs:
         run: forge build --sizes
       - name: Test
         run: forge test -vvv
+      - name: Coverage
+        run: |
+          forge coverage --report lcov
+          mkdir -p coverage
+          mv lcov.info coverage/
+      - name: Gas Snapshot
+        run: |
+          forge snapshot --snap gas-snapshot.txt || true
+          mkdir -p reports
+          mv gas-snapshot.txt reports/
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-reports
+          path: |
+            coverage/
+            reports/
+
+  analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node setup for solhint
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install solhint
+        run: npm i -g solhint
+      - name: Solhint
+        run: npm run solhint
+      - name: Slither
+        uses: crytic/slither-action@v0.3.0
+        with:
+          node-version: 20
+          solc-version: 0.8.28
+          fail-on: medium
 
   web:
     runs-on: ubuntu-latest
@@ -32,6 +68,9 @@ jobs:
       - name: Install
         working-directory: web
         run: npm ci
+      - name: Lint
+        working-directory: web
+        run: npm run lint || npm run build --no-lint
       - name: Build
         working-directory: web
         run: npm run build

@@ -38,7 +38,7 @@ export default function Home() {
     query: { enabled: false },
   });
 
-  const { writeContractAsync, status: writeStatus, error: writeError } = useWriteContract();
+  const { writeContractAsync, error: writeError } = useWriteContract();
 
   const tuple = data as GetBudgetResult | undefined;
   const limit = tuple?.[0];

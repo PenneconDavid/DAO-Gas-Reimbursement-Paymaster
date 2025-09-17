@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 /// Minimal subset of EntryPoint functions used for deposit and stake management.
 interface IEntryPointMinimal {
