@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract } from "wagmi";
 import { parseAbi, encodeFunctionData, type Address } from "viem";
-import { getAaMode, setAaMode, buildSimpleAccountCallData, buildUserOperationPreview, sendUserOp, getAaEnv, type UserOperationRequest } from "@/lib/aa";
+import { getAaMode, setAaMode, buildSimpleAccountCallData, buildUserOperationPreview, sendUserOp, getAaEnv, type UserOperationRequest } from "../lib/aa";
 
 const budgetAbi = parseAbi([
   "function getBudget(address) view returns (uint128 limitWei, uint128 usedWei, uint32 epochIndex)",
