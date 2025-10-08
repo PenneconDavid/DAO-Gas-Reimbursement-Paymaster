@@ -47,11 +47,13 @@ export default function Home() {
 
   const availableConnectors = useMemo(() => connectors.filter((c) => c.id !== "injected" || c.ready), [connectors]);
 
+  const env = getAaEnv();
+  const demoMode = !process.env.NEXT_PUBLIC_RPC_URL;
+
   async function buildAaForGovCall(fn: "setParam" | "grantRole") {
     setAaError("");
     setAaPreview(null);
     try {
-      const env = getAaEnv();
       if (!env.entryPoint || !env.paymaster) throw new Error("Missing ENTRYPOINT/PAYMASTER env");
       if (!accountAddr) throw new Error("Set SimpleAccount address in 'Account (smart wallet)'");
       if (!gov) throw new Error("Set GovActions address");
@@ -96,9 +98,12 @@ export default function Home() {
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 900, margin: "0 auto", display: "grid", gap: 24 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>DAO Gas Reimbursement</h1>
+    <main className="grid">
+      <header className="header">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h1>DAO Gas Reimbursement</h1>
+          {demoMode && <span className="badge">Demo Mode</span>}
+        </div>
         <div>
           {isConnected ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -118,11 +123,29 @@ export default function Home() {
       </header>
 
       <section>
+        <h2>Overview</h2>
+        <div className="kpi" style={{ marginTop: 12 }}>
+          <div>
+            <div style={{ opacity: 0.6, fontSize: 12 }}>Monthly Limit (wei)</div>
+            <div style={{ fontSize: 18, marginTop: 6 }}>{limit?.toString() ?? "–"}</div>
+          </div>
+          <div>
+            <div style={{ opacity: 0.6, fontSize: 12 }}>Used (wei)</div>
+            <div style={{ fontSize: 18, marginTop: 6 }}>{used?.toString() ?? "–"}</div>
+          </div>
+          <div>
+            <div style={{ opacity: 0.6, fontSize: 12 }}>Epoch</div>
+            <div style={{ fontSize: 18, marginTop: 6 }}>{epoch ?? "–"}</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
         <h2>Mode</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span>AA mode:</span>
           <button onClick={() => setAaMode(getAaMode() === "enabled" ? "disabled" : "enabled")}>{getAaMode()}</button>
-          <span style={{ opacity: 0.7 }}>(placeholder; direct EOA txs currently)</span>
+          <span style={{ opacity: 0.7 }}>Use preview without bundler; send coming soon.</span>
         </div>
       </section>
 
@@ -135,14 +158,7 @@ export default function Home() {
             {isFetching ? "Loading..." : "Load"}
           </button>
         </div>
-        {error && <p style={{ color: "crimson" }}>{String((error as { message?: string })?.message || error)}</p>}
-        {tuple && (
-          <div style={{ marginTop: 12 }}>
-            <div>limitWei: {limit?.toString()}</div>
-            <div>usedWei: {used?.toString()}</div>
-            <div>epochIndex: {epoch}</div>
-          </div>
-        )}
+        {error && <p style={{ color: "var(--danger)" }}>{String((error as { message?: string })?.message || error)}</p>}
       </section>
 
       <section>
@@ -153,28 +169,17 @@ export default function Home() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
           <input placeholder="key (bytes32 hex)" value={keyHex} onChange={(e) => setKeyHex(e.target.value)} style={{ minWidth: 240 }} />
           <input placeholder="value (uint256)" value={value} onChange={(e) => setValue(e.target.value)} style={{ minWidth: 160 }} />
-          <button
-            disabled={!isConnected || !gov}
-            onClick={async () => {
-              await writeContractAsync({ address: gov as `0x${string}`, abi: govAbi, functionName: "setParam", args: [keyHex as `0x${string}`, BigInt(value || "0")] });
-            }}
-          >
-            setParam
-          </button>
+          <button disabled={!isConnected || !gov} onClick={async () => {
+            await writeContractAsync({ address: gov as `0x${string}`, abi: govAbi, functionName: "setParam", args: [keyHex as `0x${string}`, BigInt(value || "0")] });
+          }}>setParam</button>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
           <input placeholder="user address" value={roleUser} onChange={(e) => setRoleUser(e.target.value)} style={{ minWidth: 320 }} />
-          <button
-            disabled={!isConnected || !gov || !roleUser}
-            onClick={async () => {
-              await writeContractAsync({ address: gov as `0x${string}`, abi: govAbi, functionName: "grantRole", args: [roleUser as `0x${string}`] });
-            }}
-          >
-            grantRole
-          </button>
+          <button disabled={!isConnected || !gov || !roleUser} onClick={async () => {
+            await writeContractAsync({ address: gov as `0x${string}`, abi: govAbi, functionName: "grantRole", args: [roleUser as `0x${string}`] });
+          }}>grantRole</button>
         </div>
-        {writeError && <p style={{ color: "crimson" }}>{String((writeError as { message?: string })?.message || writeError)}</p>}
-        <p style={{ opacity: 0.7 }}>AA integration will replace these with sponsored ops in M2.</p>
+        {writeError && <p style={{ color: "var(--danger)" }}>{String((writeError as { message?: string })?.message || writeError)}</p>}
       </section>
 
       <section>
@@ -182,11 +187,13 @@ export default function Home() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={() => buildAaForGovCall("setParam")}>Build AA setParam</button>
           <button onClick={() => buildAaForGovCall("grantRole")}>Build AA grantRole</button>
-          <button onClick={attemptSendAa} disabled={!aaPreview}>Attempt send (experimental)</button>
+          <button onClick={attemptSendAa} disabled={!aaPreview}>Attempt send</button>
         </div>
-        {aaError && <p style={{ color: "crimson" }}>{aaError}</p>}
+        {aaError && <p style={{ color: "var(--danger)" }}>{aaError}</p>}
         {aaPreview && (
-          <pre style={{ marginTop: 8, padding: 8, background: "#111", color: "#ddd", overflowX: "auto" }}>{JSON.stringify(aaPreview, null, 2)}</pre>
+          <pre style={{ marginTop: 8, padding: 12, background: "#0b1220", color: "#cbd5e1", overflowX: "auto", borderRadius: 8, border: "1px solid var(--border)" }}>
+            {JSON.stringify(aaPreview, null, 2)}
+          </pre>
         )}
       </section>
     </main>
