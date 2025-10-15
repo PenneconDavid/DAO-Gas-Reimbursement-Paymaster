@@ -101,6 +101,7 @@ export default function Home() {
     <main className="grid">
       <header className="header">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src="/logo.jpg" alt="logo" width={36} height={36} style={{ borderRadius: 8, border: "1px solid var(--border)" }} />
           <h1>DAO Gas Reimbursement</h1>
           {demoMode && <span className="badge">Demo Mode</span>}
         </div>
@@ -122,35 +123,35 @@ export default function Home() {
         </div>
       </header>
 
-      <section>
-        <h2>Overview</h2>
+      <section className="card">
+        <div className="card-header"><h2>Overview</h2><span className="subtle">Budget & usage</span></div>
         <div className="kpi" style={{ marginTop: 12 }}>
           <div>
             <div style={{ opacity: 0.6, fontSize: 12 }}>Monthly Limit (wei)</div>
-            <div style={{ fontSize: 18, marginTop: 6 }}>{limit?.toString() ?? "–"}</div>
+            <div className="mono" style={{ fontSize: 18, marginTop: 6 }}>{limit?.toString() ?? <div className="skeleton" />}</div>
           </div>
           <div>
             <div style={{ opacity: 0.6, fontSize: 12 }}>Used (wei)</div>
-            <div style={{ fontSize: 18, marginTop: 6 }}>{used?.toString() ?? "–"}</div>
+            <div className="mono" style={{ fontSize: 18, marginTop: 6 }}>{used?.toString() ?? <div className="skeleton" />}</div>
           </div>
           <div>
             <div style={{ opacity: 0.6, fontSize: 12 }}>Epoch</div>
-            <div style={{ fontSize: 18, marginTop: 6 }}>{epoch ?? "–"}</div>
+            <div className="mono" style={{ fontSize: 18, marginTop: 6 }}>{epoch ?? <div className="skeleton" />}</div>
           </div>
         </div>
       </section>
 
-      <section>
-        <h2>Mode</h2>
+      <section className="card">
+        <div className="card-header"><h2>Mode</h2><span className="chip">AA experimental</span></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span>AA mode:</span>
-          <button onClick={() => setAaMode(getAaMode() === "enabled" ? "disabled" : "enabled")}>{getAaMode()}</button>
+          <button className="cta" onClick={() => setAaMode(getAaMode() === "enabled" ? "disabled" : "enabled")}>{getAaMode()}</button>
           <span style={{ opacity: 0.7 }}>Use preview without bundler; send coming soon.</span>
         </div>
       </section>
 
-      <section>
-        <h2>Check Budget</h2>
+      <section className="card">
+        <div className="card-header"><h2>Check Budget</h2><span className="subtle">Reads from Paymaster</span></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input placeholder="Paymaster address" value={paymaster} onChange={(e) => setPaymaster(e.target.value)} style={{ flex: 1, minWidth: 320 }} />
           <input placeholder="Account (smart wallet)" value={accountAddr} onChange={(e) => setAccountAddr(e.target.value)} style={{ flex: 1, minWidth: 320 }} />
@@ -161,8 +162,8 @@ export default function Home() {
         {error && <p style={{ color: "var(--danger)" }}>{String((error as { message?: string })?.message || error)}</p>}
       </section>
 
-      <section>
-        <h2>GovActions (direct tx for now)</h2>
+      <section className="card">
+        <div className="card-header"><h2>GovActions</h2><span className="subtle">Direct EOA calls for demo</span></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input placeholder="GovActions address" value={gov} onChange={(e) => setGov(e.target.value)} style={{ flex: 1, minWidth: 320 }} />
         </div>
@@ -182,11 +183,11 @@ export default function Home() {
         {writeError && <p style={{ color: "var(--danger)" }}>{String((writeError as { message?: string })?.message || writeError)}</p>}
       </section>
 
-      <section>
-        <h2>AA Preview</h2>
+      <section className="card">
+        <div className="card-header"><h2>AA Preview</h2><span className="subtle">Unsigned userOp</span></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => buildAaForGovCall("setParam")}>Build AA setParam</button>
-          <button onClick={() => buildAaForGovCall("grantRole")}>Build AA grantRole</button>
+          <button className="cta" onClick={() => buildAaForGovCall("setParam")}>Build AA setParam</button>
+          <button className="cta" onClick={() => buildAaForGovCall("grantRole")}>Build AA grantRole</button>
           <button onClick={attemptSendAa} disabled={!aaPreview}>Attempt send</button>
         </div>
         {aaError && <p style={{ color: "var(--danger)" }}>{aaError}</p>}
@@ -196,6 +197,11 @@ export default function Home() {
           </pre>
         )}
       </section>
+
+      <footer className="footer">
+        <span>Built by David Seibold · </span>
+        <a href="https://github.com/PenneconDavid/DAO-Gas-Reimbursement-Paymaster" target="_blank" rel="noreferrer" style={{ color: "#93c5fd" }}>GitHub</a>
+      </footer>
     </main>
   );
 }
