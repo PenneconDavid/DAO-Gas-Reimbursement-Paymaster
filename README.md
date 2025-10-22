@@ -1,12 +1,16 @@
-# DAO Gas Reimbursement Paymaster (ERC-4337)
+# DAO Gas Reimbursement Paymaster (ERC‑4337)
 
-EntryPoint v0.8 verifying paymaster with per-sender monthly budgets, sender allowlist, epoch rollover, per-op caps, and deposit/stake helpers.
+Portfolio‑ready demo of a DAO gas reimbursement system using ERC‑4337 Account Abstraction. A verifying paymaster sponsors gas for allowlisted smart accounts within per‑month budgets, enforces per‑operation safety caps, supports a global monthly cap, and can mint a non‑transferable receipt NFT for each sponsored operation. The repo contains the on‑chain contracts, Foundry tests and scripts, a polished Next.js demo dapp, and CI.
 
-## Status
-- M0 scaffolding complete: contracts, tests, deploy + ops scripts.
+## Purpose
+- Demonstrate a realistic AA paymaster with clear safety rails and admin workflows.
+- Provide a deployable web URL showcasing the UX, budgets, and a sample governance target.
+- Serve as reference code for recruiters and contributors evaluating AA knowledge.
 
-## One‑paragraph pitch
-This repo demonstrates a DAO-style gas reimbursement system using ERC‑4337: a verifying paymaster sponsors gas for allowlisted smart accounts within per‑month budgets, enforces per‑operation safety caps, and optionally mints soulbound receipts for each sponsored UserOperation. It includes a small demo dapp, unit/integration tests, and workflows to run locally or on testnets.
+## Current Status
+- Contracts compile on solc 0.8.28 and tests are in place.
+- Demo web app deployed (Next.js 15, Turbopack) with professional dark theme.
+- AA send is preview‑only; bundler submission is scaffolded for future work.
 
 ## Architecture
 ```mermaid
@@ -46,9 +50,17 @@ sequenceDiagram
 ```
 
 ## Contracts
-- `contracts/BudgetPaymaster.sol`: Paymaster with budgets, caps, epoch math, pause, deposit/stake helpers, optional ReceiptNFT.
+- `contracts/BudgetPaymaster.sol`: Paymaster with per‑sender monthly budgets, per‑op caps (gas/fee/wei), optional global monthly cap, inline UTC month epoch math, pause, stake/deposit/withdraw helpers, and ReceiptNFT integration.
 - `contracts/ReceiptNFT.sol`: ERC‑721 SBT (ERC‑5192 semantics) minted per sponsored operation.
 - `contracts/GovActions.sol`: Demo target contract emitting events.
+
+### Key features
+- Per‑sender monthly budgets with lazy epoch rollover (UTC months).
+- Per‑operation caps: verification/call/postOp gas, absolute max fee gwei, basefee multiplier, max wei per op.
+- Optional global monthly cap across all users.
+- Sender allowlist via “budget > 0”. Optional factory allowlist for `initCode`.
+- Auto‑deposit ETH to EntryPoint on `receive()`; admin stake/unstake/withdraw.
+- Optional `ReceiptNFT` mint on successful sponsorship (soulbound semantics).
 
 ## Local Demo (no bundler)
 Simulate validate+postOp locally (shows budgeting and events):
@@ -61,6 +73,13 @@ Outputs include budget updates and “Demo done” log. This uses a mock EntryPo
 Use a bundler URL:
 - Hosted: Etherspot Skandha, Pimlico, Stackup, ZeroDev → create a project and copy the HTTPS bundler URL.
 - Local: run a bundler docker (Skandha/Stackup), point NEXT_PUBLIC_BUNDLER_RPC_URL to http://localhost:PORT.
+
+## Tech stack
+- On‑chain: Solidity 0.8.28, OpenZeppelin Contracts, ERC‑4337 interfaces, Foundry (forge/cast)
+- Tests: Foundry unit + integration, fuzzing hooks ready, gas snapshots/coverage in CI
+- Web: Next.js 15 (App Router, Turbopack), TypeScript, wagmi v2, viem v2, minimal Zustand‑free state, CSS custom properties (dark DeFi theme)
+- CI/CD: GitHub Actions (build, test, lint), Vercel deploy for web
+- Lint/Sec: solhint config, Slither step in CI (optional; requires environment tooling)
 
 ## Prereqs
 - Foundry (forge) installed and on PATH.
@@ -174,7 +193,8 @@ forge script script/DeployReceipt.s.sol:DeployReceipt --rpc-url <RPC> --broadcas
 ```
 
 ## Web Dapp
-- `web/src/app/page.tsx` includes budget view, GovActions calls (EOA), and AA preview builder.
+- Landing page shows: wallet connect, Demo Mode badge, budget KPIs, budget reader, GovActions demo calls, and an AA UserOperation preview builder. Sections are cardized with a DeFi dark theme and responsive layout.
+- Logo: place a `logo.jpg` in repo root (auto‑copied to `web/public/` in this repo).
 - Env (`web/.env`):
 ```
 NEXT_PUBLIC_RPC_URL=
@@ -187,10 +207,15 @@ NEXT_PUBLIC_SIMPLE_ACCOUNT_FACTORY=
 ```
 
 ## AA Integration (M2)
-The web app includes an AA toggle and placeholders (`src/lib/aa.ts`). In M2 we will implement UserOperation construction and bundler submission with `paymasterAndData` containing this paymaster.
+The web app includes an AA toggle and client scaffolding (`web/src/lib/aa.ts`). M2 will implement full UserOperation packing/signing and bundler submission with `paymasterAndData` supplied by this paymaster, plus a send flow with toasts and receipt linking.
 
 ## Limitations & future work
 - Sender-based allowlist (no target parsing) for MVP; can add per-target checks for SimpleAccount.
 - AA send is preview-only in UI; full bundler integration to follow.
 - Global cap is simplistic; consider role-based workflows and rate limiting.
 - No upgradability; replace-and-migrate if logic changes.
+
+## Deploying the web (Vercel)
+- Set Project Root Directory to `web`.
+- Default build command `npm run build` and output `.next` are fine.
+- If module resolution errors occur, avoid tsconfig path aliases in imports or ensure `tsconfig` paths are aligned with Turbopack.
