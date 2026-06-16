@@ -9,14 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.85.6",
+    "@tanstack/react-query": "^5.101.0",
     "@wagmi/connectors": "^5.9.9",
-    "next": "15.5.9",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "viem": "^2.36.0",
+    "dao-gas-reimbursement-paymaster": "file:..",
+    "next": "15.5.19",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "viem": "^2.52.2",
     "wagmi": "^2.16.9",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -24,7 +25,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.2",
+    "eslint-config-next": "15.5.19",
     "typescript": "^5"
   }
 }
