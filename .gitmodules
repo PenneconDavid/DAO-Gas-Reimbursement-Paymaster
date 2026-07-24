@@ -4,3 +4,9 @@
 [submodule "lib/account-abstraction"]
 	path = lib/account-abstraction
 	url = https://github.com/eth-infinitism/account-abstraction
+[submodule ".agents/skills"]
+	path = .agents/skills
+	url = https://github.com/PenneconDavid/cursor-skills.git
+[submodule ".cursor/rules"]
+	path = .cursor/rules
+	url = https://github.com/PenneconDavid/cursor-rules.git
