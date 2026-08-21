@@ -76,10 +76,10 @@ Use a bundler URL:
 
 ## Tech stack
 - On‑chain: Solidity 0.8.28, OpenZeppelin Contracts, ERC‑4337 interfaces, Foundry (forge/cast)
-- Tests: Foundry unit + integration, fuzzing hooks ready, gas snapshots/coverage in CI
+- Tests: Foundry unit + integration, fuzzing hooks ready, gas snapshots/coverage locally
 - Web: Next.js 15 (App Router, Turbopack), TypeScript, wagmi v2, viem v2, minimal Zustand‑free state, CSS custom properties (dark DeFi theme)
-- CI/CD: GitHub Actions (build, test, lint), Vercel deploy for web
-- Lint/Sec: solhint config, Slither step in CI (optional; requires environment tooling)
+- CI/CD: Vercel deploy for web. GitHub Actions CI is disabled (it never stayed green).
+- Lint/Sec: solhint config; Slither available locally (optional; requires environment tooling)
 
 ## Prereqs
 - Foundry (forge) installed and on PATH.
