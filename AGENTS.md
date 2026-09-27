@@ -11,6 +11,28 @@
 - **Web demo:** `cd web && npm run dev` → http://localhost:3000
 - **Contracts:** `forge build`, `forge test` from contracts directory (see README)
 
+## Commands
+
+| Task | Command |
+|------|---------|
+| Contracts build | `forge build` |
+| Contracts test | `forge test` |
+| Solidity lint | `npm run solhint` (repo root) |
+| Web install | `cd web && npm install` |
+| Web dev server | `cd web && npm run dev` → http://localhost:3000 |
+| Web typecheck | `cd web && npx tsc --noEmit` |
+| Web lint | `cd web && npm run lint` |
+| Web build | `cd web && npm run build` |
+
+A `Makefile` at the root wraps common targets; read it before adding new ones.
+
+## Definition of done
+
+- Contract changes: `forge build`, `forge test`, and `npm run solhint` pass.
+- Web changes: typecheck, lint, and build pass; `visual-qa-testing` on the changed page.
+- `ConnectionGuide.txt` updated if any RPC endpoint, contract address, or route changed.
+- Never broadcast a deployment script without asking.
+
 ## Shared config
 
 - **Skills:** `.agents/skills/` → [cursor-skills](https://github.com/PenneconDavid/cursor-skills)
